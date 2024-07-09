@@ -134,6 +134,13 @@ protected:
 
 #pragma endregion
 
+#pragma region HUD
+
+public:
+	FVector2D GetCrosshairScreenPosition(APlayerController* PlayerController);
+
+#pragma endregion
+
 #pragma region Move&Look
 
 protected:
@@ -167,12 +174,21 @@ public:
 #pragma endregion
 
 #pragma region Commands
-	private:
-		UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD", meta = (AllowPrivateAccess = "true"))
-		TSubclassOf<ACMD_UpdateHUD> CMD_UpdateHUDClass;
+private:
 
-		UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD", meta = (AllowPrivateAccess = "true"))
-		TArray<ACMD_UpdateHUD*> SpawnedCMDs;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD", meta = (AllowPrivateAccess = "true"))
+	TSubclassOf<ACMD_UpdateHUD> CMD_UpdateHUDClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD", meta = (AllowPrivateAccess = "true"))
+	TArray<ACMD_UpdateHUD*> SpawnedCMDs;
+
+#pragma endregion
+
+#pragma region Utility
+public:
+
+	UFUNCTION(BlueprintCallable, Category = "Utility")
+	FVector GetWorldPositionFromScreenPosition(APlayerController* PlayerController, FVector2D ScreenPosition);
 
 #pragma endregion
 };
