@@ -1,5 +1,3 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
 #include "MidProgrammerTestCharacter.h"
 #include "Engine/LocalPlayer.h"
 #include "Camera/CameraComponent.h"
@@ -22,6 +20,7 @@
 #include "CMD_UpdateHUD.h"
 #include "Particles/ParticleSystem.h"
 #include "Particles/ParticleSystemComponent.h"
+#include "Net/UnrealNetwork.h"
 
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
@@ -64,7 +63,7 @@ AMidProgrammerTestCharacter::AMidProgrammerTestCharacter()
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	FollowCamera->bUsePawnControlRotation = false; 
 	
-
+	bReplicates = true;
 }	
 
 void AMidProgrammerTestCharacter::BeginPlay()
@@ -185,8 +184,8 @@ void AMidProgrammerTestCharacter::CharacterDead()
 	CharacterState = ECharacterState::Dead;
 	DisableMovement();
 
-	UE_LOG(LogTemp, Log, TEXT("You dieded!!! Noob!"));
-	FString Message = "You dieded!!! Noob!";
+	UE_LOG(LogTemp, Log, TEXT("Character Dieded!"));
+	FString Message = "Character Dieded!";
 	PrintMessage(Message);
 }
 
@@ -266,14 +265,37 @@ void AMidProgrammerTestCharacter::Fire()
 {
 	APlayerController* PlayerController = UGameplayStatics::GetPlayerController(GetWorld(), 0);
 	if (!PlayerController) return;
-	
+
 	FVector2D CrosshairScreenPosition = GetCrosshairScreenPosition(PlayerController);
 	FVector ExplosionWorldPosition = GetWorldPositionFromScreenPosition(PlayerController, CrosshairScreenPosition);
 
-	UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), ExplosionEffect, ExplosionWorldPosition);
+	if (HasAuthority())
+	{
+		MulticastExplosion(ExplosionWorldPosition);
+	}
+	else
+	{
+		ServerTriggerExplosion(ExplosionWorldPosition);
+	}
 
-	FString Message = "Pew Pew Pew!! Die Die Die!!";
-	PrintMessage(Message);
+}
+
+void AMidProgrammerTestCharacter::MulticastExplosion_Implementation(const FVector& Location)
+{
+	if (ExplosionEffect)
+	{
+		UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), ExplosionEffect, Location);
+	}
+}
+
+bool AMidProgrammerTestCharacter::ServerTriggerExplosion_Validate(const FVector& Location)
+{
+	return true;
+}
+
+void AMidProgrammerTestCharacter::ServerTriggerExplosion_Implementation(const FVector& Location)
+{
+	MulticastExplosion(Location);
 }
 
 FVector2D AMidProgrammerTestCharacter::GetCrosshairScreenPosition(APlayerController* PlayerController)
@@ -320,7 +342,6 @@ FVector AMidProgrammerTestCharacter::GetWorldPositionFromScreenPosition(APlayerC
 #pragma endregion
 
 
-
 #pragma region Utility
 
 void AMidProgrammerTestCharacter::DisableMovement()
@@ -347,3 +368,13 @@ void AMidProgrammerTestCharacter::PrintMessage(FString Message)
 
 #pragma endregion
 
+#pragma region Multiplayer
+
+void AMidProgrammerTestCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(AMidProgrammerTestCharacter, ExplosionEffect);
+}
+
+#pragma endregion
