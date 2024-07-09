@@ -264,12 +264,57 @@ void AMidProgrammerTestCharacter::DeleteCMDs()
 
 void AMidProgrammerTestCharacter::Fire()
 {
-	FVector WorldLocation = this->GetActorLocation();
-
-	UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), ExplosionEffect, WorldLocation);
+	APlayerController* PlayerController = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+	if (!PlayerController) return;
 	
+	FVector2D CrosshairScreenPosition = GetCrosshairScreenPosition(PlayerController);
+	FVector ExplosionWorldPosition = GetWorldPositionFromScreenPosition(PlayerController, CrosshairScreenPosition);
+
+	UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), ExplosionEffect, ExplosionWorldPosition);
+
 	FString Message = "Pew Pew Pew!! Die Die Die!!";
 	PrintMessage(Message);
+}
+
+FVector2D AMidProgrammerTestCharacter::GetCrosshairScreenPosition(APlayerController* PlayerController)
+{
+	if (HUDWidget)
+	{
+		FName FunctionName = "WBP_Fetch_CrosshairPosition";
+		UFunction* Function = HUDWidget->FindFunction(FunctionName);
+
+		if (Function)
+		{
+			FVector2D ReturnValue;
+
+			HUDWidget->ProcessEvent(Function, &ReturnValue);
+
+			return ReturnValue;
+		}
+	}
+
+	return FVector2D::ZeroVector;
+}
+
+FVector AMidProgrammerTestCharacter::GetWorldPositionFromScreenPosition(APlayerController* PlayerController, FVector2D ScreenPosition)
+{
+	if (!PlayerController) return FVector::ZeroVector;
+
+	FVector WorldLocation, WorldDirection;
+	PlayerController->DeprojectScreenPositionToWorld(ScreenPosition.X, ScreenPosition.Y, WorldLocation, WorldDirection);
+
+	FVector EndLocation = WorldLocation + (WorldDirection * 3000.0f); // Adjust the range as necessary
+
+	FHitResult HitResult;
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(PlayerController->GetPawn());
+
+	if (PlayerController->GetWorld()->LineTraceSingleByChannel(HitResult, WorldLocation, EndLocation, ECC_Visibility, Params))
+	{
+		return HitResult.Location;
+	}
+
+	return EndLocation;
 }
 
 #pragma endregion
