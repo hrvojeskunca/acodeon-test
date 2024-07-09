@@ -1,5 +1,3 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
 #pragma once
 
 #include "CoreMinimal.h"
@@ -13,6 +11,9 @@ class AMidProgrammerTestGameMode : public AGameModeBase
 
 public:
 	AMidProgrammerTestGameMode();
+
+protected:
+	virtual void BeginPlay() override;
 };
 
 

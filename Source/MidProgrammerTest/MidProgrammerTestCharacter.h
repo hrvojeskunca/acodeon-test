@@ -85,8 +85,14 @@ protected:
 
 protected:
 
-	UPROPERTY(EditDefaultsOnly, Category = "Explosion")
+	UPROPERTY(EditDefaultsOnly, Replicated, Category = "Explosion")
 	UParticleSystem* ExplosionEffect;
+
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastExplosion(const FVector& Location);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void ServerTriggerExplosion(const FVector& Location);
 
 #pragma endregion
 
@@ -189,6 +195,13 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Utility")
 	FVector GetWorldPositionFromScreenPosition(APlayerController* PlayerController, FVector2D ScreenPosition);
+
+#pragma endregion
+
+#pragma region Multiplayer
+
+protected:
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 #pragma endregion
 };

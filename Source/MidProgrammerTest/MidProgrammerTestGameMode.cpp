@@ -1,8 +1,8 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
 #include "MidProgrammerTestGameMode.h"
 #include "MidProgrammerTestCharacter.h"
 #include "UObject/ConstructorHelpers.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerStart.h"
 
 AMidProgrammerTestGameMode::AMidProgrammerTestGameMode()
 {
@@ -13,3 +13,9 @@ AMidProgrammerTestGameMode::AMidProgrammerTestGameMode()
 		DefaultPawnClass = PlayerPawnBPClass.Class;
 	}
 }
+
+void AMidProgrammerTestGameMode::BeginPlay()
+{
+	Super::BeginPlay();
+}
+
