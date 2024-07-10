@@ -6,7 +6,6 @@
 #include "Blueprint/UserWidget.h"
 #include "HealthComponent.h"
 #include "HPInterface.h"
-#include "CMD_UpdateHUD.h"
 #include "Particles/ParticleSystem.h"
 #include "Particles/ParticleSystemComponent.h"
 #include "MidProgrammerTestCharacter.generated.h"
@@ -16,6 +15,7 @@ class UCameraComponent;
 class UInputMappingContext;
 class UInputAction;
 class UUserWidget;
+class UHealthComponent;
 struct FInputActionValue;
 
 // ------------------------------------------------ Enums -------------------------------------------------
@@ -46,16 +46,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
 	UCameraComponent* FollowCamera;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Health", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Replicated, Category = "Health", meta = (AllowPrivateAccess = "true"))
 	UHealthComponent* HealthComponent;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health", meta = (AllowPrivateAccess = "true"))
-	float LocalMaxHealth;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health", meta = (AllowPrivateAccess = "true"))
-	float LocalCurrentHealth;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Character State")
+	UPROPERTY(BlueprintReadWrite, Category = "Character State")
 	ECharacterState CharacterState;
 
 #pragma endregion
@@ -94,6 +88,9 @@ protected:
 	UFUNCTION(Server, Reliable, WithValidation)
 	void ServerTriggerExplosion(const FVector& Location);
 
+	UFUNCTION()
+	void HandleExplosionDamage(const FVector& Location);
+
 #pragma endregion
 
 
@@ -117,20 +114,11 @@ public:
 
 	AMidProgrammerTestCharacter();
 
-	UFUNCTION(BlueprintCallable, Category = "Health")
-	void ApplyDamageAction(float DamageAmount);
-
 	UFUNCTION()
 	void PrintMessage(FString Message);
 
 	UFUNCTION(Category = "Utility")
 	void DisableMovement();
-
-	UFUNCTION(Category = "HUD")
-	ACMD_UpdateHUD* CreateCommand(float MaxHP, float CurrentHP, AActor* OwningActor);
-
-	UFUNCTION(BlueprintCallable, Category = "HUD")
-	void DeleteCMDs();
 
 protected:
 	
@@ -171,22 +159,16 @@ public:
 #pragma region Interfaces
 public:
 
-	virtual void ApplyDamage(float DamageAmount) override;
-
 	virtual void CharacterDead() override;
 
-	virtual void UpdateUI_HP(float MaxHP, float CurrentHP) override;
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
+	void UpdateHUD_HP(float MaxHP, float CurrentHP);
 
-#pragma endregion
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastUpdateHUD_HP(float MaxHP, float CurrentHP);
 
-#pragma region Commands
-private:
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD", meta = (AllowPrivateAccess = "true"))
-	TSubclassOf<ACMD_UpdateHUD> CMD_UpdateHUDClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "HUD", meta = (AllowPrivateAccess = "true"))
-	TArray<ACMD_UpdateHUD*> SpawnedCMDs;
+	UFUNCTION(Client, Reliable)
+	void ClientUpdateHUD_HP(float MaxHP, float CurrentHP);
 
 #pragma endregion
 

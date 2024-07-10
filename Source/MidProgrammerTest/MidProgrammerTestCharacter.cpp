@@ -1,23 +1,29 @@
 #include "MidProgrammerTestCharacter.h"
+
 #include "Engine/LocalPlayer.h"
+#include "Engine/Engine.h"
+
+#include "GameFramework/Controller.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/InputSettings.h"
+
 #include "Camera/CameraComponent.h"
+
 #include "Components/CapsuleComponent.h"
+#include "HealthComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
-#include "GameFramework/Controller.h"
+
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 #include "InputAction.h"
 #include "InputMappingContext.h"
+
 #include "Blueprint/UserWidget.h"
-#include "GameFramework/PlayerController.h"
+
 #include "Kismet/GameplayStatics.h"
-#include "HealthComponent.h"
-#include "GameFramework/PlayerController.h"
-#include "Engine/Engine.h"
-#include "GameFramework/InputSettings.h"
-#include "CMD_UpdateHUD.h"
+
 #include "Particles/ParticleSystem.h"
 #include "Particles/ParticleSystemComponent.h"
 #include "Net/UnrealNetwork.h"
@@ -27,15 +33,10 @@ DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
 AMidProgrammerTestCharacter::AMidProgrammerTestCharacter()
 {
-	// HUD
 	HUDWidget = nullptr;
 	
-	// Health Component
 	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
-	LocalMaxHealth = 120.0f;
-	LocalCurrentHealth = 120.0f;
 
-	// Health State
 	CharacterState = ECharacterState::Alive;
 
 	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
@@ -76,15 +77,22 @@ void AMidProgrammerTestCharacter::BeginPlay()
 		UE_LOG(LogTemplateCharacter, Log, TEXT("PC is set!"));
 	}
 
-	// Create HUD & AddToViewport
 	if (HUDWidgetClass)
 	{
 		HUDWidget = CreateWidget<UUserWidget>(GetWorld(), HUDWidgetClass);
 		if (HUDWidget)
 		{
-			UpdateUI_HP(LocalMaxHealth, LocalCurrentHealth);
+			float DefaultMaxHealth = 120.0f;
+			float DefaultCurrentHealth = DefaultMaxHealth;
+
+			UpdateHUD_HP(DefaultMaxHealth, DefaultCurrentHealth);
 			HUDWidget->AddToViewport();
 		}
+	}
+
+	if (HealthComponent)
+	{
+		HealthComponent->OnHealthChanged.AddDynamic(this, &AMidProgrammerTestCharacter::UpdateHUD_HP);
 	}
 }
 
@@ -166,19 +174,6 @@ void AMidProgrammerTestCharacter::Look(const FInputActionValue& Value)
 
 #pragma region Health
 
-void AMidProgrammerTestCharacter::ApplyDamageAction(float DamageAmount)
-{
-	ApplyDamage(DamageAmount);
-}
-
-void AMidProgrammerTestCharacter::ApplyDamage(float DamageAmount)
-{
-	if (HealthComponent && CharacterState == ECharacterState::Alive)
-	{
-		HealthComponent->ApplyDamage(DamageAmount);
-	}
-}
-
 void AMidProgrammerTestCharacter::CharacterDead()
 {
 	CharacterState = ECharacterState::Dead;
@@ -194,67 +189,49 @@ void AMidProgrammerTestCharacter::CharacterDead()
 
 #pragma region HUD
 
-void AMidProgrammerTestCharacter::UpdateUI_HP(float MaxHP, float CurrentHP)
+void AMidProgrammerTestCharacter::UpdateHUD_HP_Implementation(float MaxHP, float CurrentHP)
 {
-	AMidProgrammerTestCharacter* ThisCharacter = this;
-
-	ACMD_UpdateHUD* NewCMD = CreateCommand(MaxHP, CurrentHP, ThisCharacter);
-	if (NewCMD && HUDWidget)
+	if (HasAuthority())
 	{
-		FName FunctionName = TEXT("WBP_UpdateHUD_HP");
-		if (UFunction* Function = HUDWidget->FindFunction(FunctionName))
+		ClientUpdateHUD_HP(MaxHP, CurrentHP);
+	}
+	else
+	{
+		MulticastUpdateHUD_HP(MaxHP, CurrentHP);
+	}
+}
+
+void AMidProgrammerTestCharacter::MulticastUpdateHUD_HP_Implementation(float MaxHP, float CurrentHP)
+{
+	if (HUDWidget)
+	{
+		FName FunctionName = "WBP_UpdateHealth";
+		UFunction* Function = HUDWidget->FindFunction(FunctionName);
+		if (Function)
 		{
 			struct FCustomThunk
 			{
-				ACMD_UpdateHUD* CMD;
+				FVector2D HPVector;
 			};
 
 			FCustomThunk Parms;
-			Parms.CMD = NewCMD;
+			Parms.HPVector = FVector2D(MaxHP, CurrentHP);
 
 			HUDWidget->ProcessEvent(Function, &Parms);
 		}
 	}
-}
-
-ACMD_UpdateHUD* AMidProgrammerTestCharacter::CreateCommand(float MaxHP, float CurrentHP, AActor* OwningActor)
-{
-	if (CMD_UpdateHUDClass)
+	else
 	{
-		FActorSpawnParameters SpawnParams;
-		SpawnParams.Owner = OwningActor;
-
-		FVector SpawnLocation = GetActorLocation();
-		FRotator SpawnRotation = GetActorRotation();
-
-		ACMD_UpdateHUD* NewCMD = GetWorld()->SpawnActor<ACMD_UpdateHUD>(CMD_UpdateHUDClass, SpawnLocation, SpawnRotation, SpawnParams);
-
-		if (NewCMD)
-		{
-			NewCMD->OwningActor = OwningActor;
-			NewCMD->SetHP(EHPType::Max, MaxHP);
-			NewCMD->SetHP(EHPType::Current, CurrentHP);
-
-			SpawnedCMDs.Add(NewCMD);
-		}
-
-		return NewCMD;
+		FString ErrorMessage = TEXT("HUDWidget is null. Cannot update HUD.");
+		PrintMessage(ErrorMessage);
 	}
-	
-	return nullptr;
 }
 
-void AMidProgrammerTestCharacter::DeleteCMDs()
+void AMidProgrammerTestCharacter::ClientUpdateHUD_HP_Implementation(float MaxHP, float CurrentHP)
 {
-	for (ACMD_UpdateHUD* CMD : SpawnedCMDs)
-	{
-		if (CMD)
-		{
-			CMD->Destroy();
-		}
-	}
-	SpawnedCMDs.Empty();
+	MulticastUpdateHUD_HP(MaxHP, CurrentHP);
 }
+
 
 #pragma endregion
 
@@ -277,7 +254,6 @@ void AMidProgrammerTestCharacter::Fire()
 	{
 		ServerTriggerExplosion(ExplosionWorldPosition);
 	}
-
 }
 
 void AMidProgrammerTestCharacter::MulticastExplosion_Implementation(const FVector& Location)
@@ -285,7 +261,28 @@ void AMidProgrammerTestCharacter::MulticastExplosion_Implementation(const FVecto
 	if (ExplosionEffect)
 	{
 		UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), ExplosionEffect, Location);
+
+		HandleExplosionDamage(Location);
 	}
+}
+
+void AMidProgrammerTestCharacter::HandleExplosionDamage(const FVector& Location)
+{
+	float DamageAmount = 30.0f;
+	float DamageRadius = 200.f;
+
+	UGameplayStatics::ApplyRadialDamage(
+		this,                   // World context
+		DamageAmount,           // BaseDamage
+		Location,               // Origin
+		DamageRadius,           // Damage Radius
+		nullptr,                // DamageTypeClass
+		TArray<AActor*>(),      // Actors to ignore
+		this,                   // Damage Causer
+		GetInstigatorController(), // Instigator Controller
+		true,                   // Do full damage
+		ECC_Visibility          // Damage prevention channel
+	);
 }
 
 bool AMidProgrammerTestCharacter::ServerTriggerExplosion_Validate(const FVector& Location)
@@ -325,7 +322,7 @@ FVector AMidProgrammerTestCharacter::GetWorldPositionFromScreenPosition(APlayerC
 	FVector WorldLocation, WorldDirection;
 	PlayerController->DeprojectScreenPositionToWorld(ScreenPosition.X, ScreenPosition.Y, WorldLocation, WorldDirection);
 
-	FVector EndLocation = WorldLocation + (WorldDirection * 3000.0f); // Adjust the range as necessary
+	FVector EndLocation = WorldLocation + (WorldDirection * 3000.0f);
 
 	FHitResult HitResult;
 	FCollisionQueryParams Params;
@@ -354,6 +351,7 @@ void AMidProgrammerTestCharacter::DisableMovement()
 		{
 			DisableInput(PlayerController);
 			UE_LOG(LogTemp, Log, TEXT("Input Disabled"));
+			PrintMessage("Input Disabled");
 		}
 	}
 }
@@ -375,6 +373,7 @@ void AMidProgrammerTestCharacter::GetLifetimeReplicatedProps(TArray<FLifetimePro
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(AMidProgrammerTestCharacter, ExplosionEffect);
+	DOREPLIFETIME(AMidProgrammerTestCharacter, HealthComponent);
 }
 
 #pragma endregion

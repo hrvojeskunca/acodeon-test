@@ -22,10 +22,9 @@ class MIDPROGRAMMERTEST_API IHPInterface
 
 	// Add interface functions to this class. This is the class that will be inherited to implement this interface.
 public:
-	
-	virtual void ApplyDamage(float DamageAmount) = 0;
 
 	virtual void CharacterDead() = 0;
 
-	virtual void UpdateUI_HP(float MaxHealth, float CurrentHealth) = 0;
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
+	void UpdateHUD_HP(float MaxHealth, float CurrentHealth);
 };

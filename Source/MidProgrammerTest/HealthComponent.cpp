@@ -3,38 +3,77 @@
 #include "HPInterface.h"
 #include "Engine/Engine.h"
 #include "MidProgrammerTestCharacter.h"
+#include "Net/UnrealNetwork.h"
+#include "Kismet/GameplayStatics.h"
 
 UHealthComponent::UHealthComponent()
 {
 	MaxHealth = 120.0f;
-	CurrentHealth = 120.0f;
+	CurrentHealth = MaxHealth;
+
+	SetIsReplicatedByDefault(true);
 }
 
 
 void UHealthComponent::BeginPlay()
 {
 	Super::BeginPlay();
+
+	AActor* Owner = GetOwner();
+	if (Owner)
+	{
+		Owner->OnTakeAnyDamage.AddDynamic(this, &UHealthComponent::HandleTakeAnyDamage);
+	}
+}
+
+void UHealthComponent::HandleTakeAnyDamage(AActor* DamagedActor, float Damage, const UDamageType* DamageType, AController* InstigatedBy, AActor* DamageCauser)
+{
+	if (Damage <= 0.0f || CurrentHealth <= 0.0f)
+	{
+		return;
+	}
+
+	CurrentHealth = FMath::Clamp(CurrentHealth - Damage, 0.0f, MaxHealth);
 	
-}
-
-void UHealthComponent::ApplyDamage(float DamageAmount)
-{
-	CurrentHealth -= DamageAmount;
-	CheckCurrentHealth(CurrentHealth);
-}
-
-void UHealthComponent::CheckCurrentHealth(float Health)
-{
-	if (Health <= 0.0f)
+	if (GetOwner()->HasAuthority())
 	{
-		CurrentHealth = 0.0f;
+		ServerUpdateHealth(CurrentHealth);
+	}
+
+	OnHealthChanged.Broadcast(MaxHealth, CurrentHealth);
+
+	if (IHPInterface* HPInterface = Cast<IHPInterface>(GetOwner()))
+	{
+		IHPInterface::Execute_UpdateHUD_HP(GetOwner(), MaxHealth, CurrentHealth);
+	}
+
+	if (CurrentHealth <= 0.0f)
+	{
 		CharacterDead();
-		UpdateUI_HP(MaxHealth, CurrentHealth);
 	}
-	else
+}
+
+void UHealthComponent::ServerUpdateHealth_Implementation(float NewHealth)
+{
+	CurrentHealth = NewHealth;
+	OnHealthChanged.Broadcast(MaxHealth, CurrentHealth);
+	if (IHPInterface* HPInterface = Cast<IHPInterface>(GetOwner()))
 	{
-		UpdateUI_HP(MaxHealth, CurrentHealth);
+		IHPInterface::Execute_UpdateHUD_HP(GetOwner(), MaxHealth, CurrentHealth);
 	}
+}
+
+bool UHealthComponent::ServerUpdateHealth_Validate(float NewHealth)
+{
+	return true;
+}
+
+void UHealthComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(UHealthComponent, CurrentHealth);
+	DOREPLIFETIME(UHealthComponent, MaxHealth);
 }
 
 void UHealthComponent::CharacterDead()
@@ -50,7 +89,7 @@ void UHealthComponent::CharacterDead()
 	}
 }
 
-void UHealthComponent::UpdateUI_HP(float MaxHP, float CurrentHP)
+void UHealthComponent::UpdateHUD_HP(float MaxHP, float CurrentHP)
 {
 	AActor* Owner = GetOwner();
 	if (Owner)
@@ -58,7 +97,7 @@ void UHealthComponent::UpdateUI_HP(float MaxHP, float CurrentHP)
 		IHPInterface* Interface = Cast<IHPInterface>(Owner);
 		if (Interface)
 		{
-			Interface->UpdateUI_HP(MaxHP, CurrentHP);
+			IHPInterface::Execute_UpdateHUD_HP(Owner, MaxHP, CurrentHP);
 		}
 	}
 }
