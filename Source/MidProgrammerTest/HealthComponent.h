@@ -5,6 +5,7 @@
 #include "HPInterface.h"
 #include "HealthComponent.generated.h"
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnHealthChangedSignature, float, MaxHealth, float, CurrentHealth);
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class MIDPROGRAMMERTEST_API UHealthComponent : public UActorComponent, public IHPInterface
@@ -12,28 +13,34 @@ class MIDPROGRAMMERTEST_API UHealthComponent : public UActorComponent, public IH
 	GENERATED_BODY()
 
 public:	
-	// Sets default values for this component's properties
+	
 	UHealthComponent();
 
 protected:
-	// Called when the game starts
+	
 	virtual void BeginPlay() override;
 
+
 public:	
-	//HPInterface
-	virtual void ApplyDamage(float DamageAmount) override;
-	
-	virtual void CharacterDead() override;
 
-	virtual void UpdateUI_HP(float MaxHP, float CurrentHP) override;
-
-	// Health properties
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Health")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Replicated, Category = "Health")
 	float MaxHealth;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Health")
+	UPROPERTY(BlueprintReadOnly, Replicated, Category = "Health")
 	float CurrentHealth;
 
 	UFUNCTION()
-	void CheckCurrentHealth(float Health);
+	void HandleTakeAnyDamage(AActor* DamagedActor, float Damage, const UDamageType* DamageType, AController* InstigatedBy, AActor* DamageCauser);
+
+	UPROPERTY(BlueprintAssignable, Category = "Events")
+	FOnHealthChangedSignature OnHealthChanged;
+
+	virtual void CharacterDead() override;
+
+	void UpdateHUD_HP(float MaxHP, float CurrentHP);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void ServerUpdateHealth(float NewHealth);
+
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 };
