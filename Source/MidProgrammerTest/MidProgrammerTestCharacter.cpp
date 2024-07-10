@@ -343,16 +343,34 @@ FVector AMidProgrammerTestCharacter::GetWorldPositionFromScreenPosition(APlayerC
 
 void AMidProgrammerTestCharacter::DisableMovement()
 {
-	APlayerController* PlayerController = GetController<APlayerController>();
-
-	if (PlayerController)
+	if (HasAuthority())
 	{
-		if (PlayerController->GetPawn() == this)
-		{
-			DisableInput(PlayerController);
-			UE_LOG(LogTemp, Log, TEXT("Input Disabled"));
-			PrintMessage("Input Disabled");
-		}
+		ServerDisableMovement();
+	}
+	else
+	{
+		ServerDisableMovement();
+	}
+}
+
+void AMidProgrammerTestCharacter::ServerDisableMovement_Implementation()
+{
+	MulticastDisableMovement();
+}
+
+bool AMidProgrammerTestCharacter::ServerDisableMovement_Validate()
+{
+	return true;
+}
+
+void AMidProgrammerTestCharacter::MulticastDisableMovement_Implementation()
+{
+	APlayerController* PlayerController = GetController<APlayerController>();
+	if (PlayerController && PlayerController->GetPawn() == this)
+	{
+		DisableInput(PlayerController);
+		UE_LOG(LogTemp, Log, TEXT("Input Disabled"));
+		PrintMessage("Input Disabled");
 	}
 }
 

@@ -120,6 +120,12 @@ public:
 	UFUNCTION(Category = "Utility")
 	void DisableMovement();
 
+	UFUNCTION(Server, Reliable, WithValidation)
+	void ServerDisableMovement();
+
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastDisableMovement();
+
 protected:
 	
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
